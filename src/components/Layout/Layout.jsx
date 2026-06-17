@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { Menu, LogOut, X } from 'lucide-react'
+import logo from '@/assets/miumiuLogo.jpg'
 import useAuthStore from '@/store/authStore'
 import { cn } from '@/lib/utils'
 
@@ -45,9 +46,12 @@ export default function Layout() {
       >
         <div className="px-5 py-5 border-b border-gray-100">
           <div className="flex items-center justify-between">
-            <div>
-              <div className="font-bold text-gray-900 text-base">秧秧雞蛋糕</div>
-              <div className="text-xs text-gray-500 mt-0.5">後台管理系統</div>
+            <div className="flex items-center gap-3">
+              <img src={logo} alt="秧秧雞蛋糕" className="w-9 h-9 object-cover rounded-xl flex-shrink-0" />
+              <div>
+                <div className="font-bold text-gray-900 text-base">秧秧雞蛋糕</div>
+                <div className="text-xs text-gray-500 mt-0.5">後台管理系統</div>
+              </div>
             </div>
             <button
               className="lg:hidden text-gray-400 hover:text-gray-600"
@@ -104,7 +108,8 @@ export default function Layout() {
           >
             <Menu size={20} />
           </button>
-          <span className="ml-3 font-semibold text-gray-900 text-sm">秧秧雞蛋糕</span>
+          <img src={logo} alt="秧秧雞蛋糕" className="ml-3 w-7 h-7 object-cover rounded-lg" />
+          <span className="ml-2 font-semibold text-gray-900 text-sm">秧秧雞蛋糕</span>
         </header>
 
         <main className="flex-1 overflow-y-auto p-6">
