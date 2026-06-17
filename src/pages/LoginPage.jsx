@@ -140,24 +140,21 @@ export default function LoginPage() {
               </button>
             </form>
 
-            {LINE_CHANNEL_ID && (
-              <>
-                <div className="flex items-center gap-3 my-5">
-                  <hr className="flex-1 border-gray-100" />
-                  <span className="text-xs text-gray-400">或</span>
-                  <hr className="flex-1 border-gray-100" />
-                </div>
-                <a
-                  href={buildLineAuthUrl()}
-                  className="flex items-center justify-center gap-2 w-full h-10 bg-[#06C755] hover:bg-[#05a847] text-white font-medium rounded-lg text-sm transition-colors"
-                >
-                  <svg width="18" height="18" viewBox="0 0 44 44" fill="none">
-                    <path d="M22 4C12.059 4 4 11.163 4 20c0 5.408 3.026 10.19 7.687 13.19L10 40l6.863-3.6C18.21 36.785 20.077 37 22 37c9.941 0 18-7.163 18-16S31.941 4 22 4z" fill="white"/>
-                  </svg>
-                  以 LINE 帳號登入
-                </a>
-              </>
-            )}
+            <div className="flex items-center gap-3 my-5">
+              <hr className="flex-1 border-gray-100" />
+              <span className="text-xs text-gray-400">或</span>
+              <hr className="flex-1 border-gray-100" />
+            </div>
+            <a
+              href={LINE_CHANNEL_ID ? buildLineAuthUrl() : undefined}
+              onClick={!LINE_CHANNEL_ID ? (e) => { e.preventDefault(); alert('請先設定 VITE_LINE_CHANNEL_ID 環境變數') } : undefined}
+              className={`flex items-center justify-center gap-2 w-full h-10 bg-[#06C755] text-white font-medium rounded-lg text-sm transition-colors ${LINE_CHANNEL_ID ? 'hover:bg-[#05a847]' : 'opacity-50 cursor-not-allowed'}`}
+            >
+              <svg width="18" height="18" viewBox="0 0 44 44" fill="none">
+                <path d="M22 4C12.059 4 4 11.163 4 20c0 5.408 3.026 10.19 7.687 13.19L10 40l6.863-3.6C18.21 36.785 20.077 37 22 37c9.941 0 18-7.163 18-16S31.941 4 22 4z" fill="white"/>
+              </svg>
+              以 LINE 帳號登入
+            </a>
           </>
         ) : (
           <>
