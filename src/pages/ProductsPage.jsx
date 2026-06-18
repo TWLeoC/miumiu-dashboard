@@ -96,13 +96,29 @@ export default function ProductsPage() {
   }
 
   const toggleProductEnable = async (p) => {
-    const id = p.id || p._id
     try {
-      await api.patch(`/api/products/${id}`, { is_enable: !(p.is_enable ?? p.isEnable) })
+      await api.patch(`/api/products/${p.id || p._id}`, { is_enable: !(p.is_enable ?? p.isEnable) })
       fetchAll()
-    } catch {
-      alert('操作失敗')
-    }
+    } catch { alert('操作失敗') }
+  }
+
+  const togglePreListed = async (p) => {
+    const next = !p.is_pre_listed
+    try {
+      await api.patch(`/api/products/${p.id || p._id}`, {
+        is_pre_listed: next,
+        ...(next ? { is_enable: false } : {}),
+      })
+      fetchAll()
+    } catch { alert('操作失敗') }
+  }
+
+  const updateAdvanceDays = async (p, value) => {
+    const days = value === '' ? null : Number(value)
+    try {
+      await api.patch(`/api/products/${p.id || p._id}`, { advance_days: days })
+      fetchAll()
+    } catch { alert('操作失敗') }
   }
 
   const deleteProduct = async (p) => {
@@ -113,6 +129,31 @@ export default function ProductsPage() {
     } catch (err) {
       alert(err.response?.data?.message || '刪除失敗')
     }
+  }
+
+  const moveProduct = async (productId, categoryId, direction) => {
+    const catProducts = products.filter(p => (p.category_id || '__none__') === categoryId)
+    const idx = catProducts.findIndex(p => (p.id || p._id) === productId)
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (swapIdx < 0 || swapIdx >= catProducts.length) return
+    const a = catProducts[idx], b = catProducts[swapIdx]
+    await api.patch('/api/products/reorder', [
+      { id: a.id || a._id, sort_order: b.sort_order ?? swapIdx },
+      { id: b.id || b._id, sort_order: a.sort_order ?? idx },
+    ])
+    fetchAll()
+  }
+
+  const moveCategory = async (catId, direction) => {
+    const idx = categories.findIndex(c => (c.id || c._id) === catId)
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (swapIdx < 0 || swapIdx >= categories.length) return
+    const a = categories[idx], b = categories[swapIdx]
+    await Promise.all([
+      api.patch(`/api/admin/categories/${a.id || a._id}`, { sort_order: b.sort_order ?? swapIdx }),
+      api.patch(`/api/admin/categories/${b.id || b._id}`, { sort_order: a.sort_order ?? idx }),
+    ])
+    fetchAll()
   }
 
   const openAddonPanel = async (p) => {
@@ -177,7 +218,6 @@ export default function ProductsPage() {
 
   if (loading) return <div className="text-center py-16 text-gray-400 text-sm">載入中...</div>
 
-  // Build category groups
   const catMap = {}
   const uncategorized = []
   products.forEach(p => {
@@ -221,8 +261,12 @@ export default function ProductsPage() {
                 <textarea className={inputCls} rows={2} value={productForm.description} onChange={e => setProductForm(p => ({ ...p, description: e.target.value }))} />
               </div>
               <div>
+                <label className="text-xs text-gray-500 mb-1 block">原價 *</label>
+                <input className={inputCls} type="number" min="0" value={productForm.origin_price} onChange={e => setProductForm(p => ({ ...p, origin_price: e.target.value }))} required />
+              </div>
+              <div>
                 <label className="text-xs text-gray-500 mb-1 block">售價 *</label>
-                <input className={inputCls} type="number" value={productForm.price} onChange={e => setProductForm(p => ({ ...p, price: e.target.value }))} required />
+                <input className={inputCls} type="number" min="0" value={productForm.price} onChange={e => setProductForm(p => ({ ...p, price: e.target.value }))} required />
               </div>
               <div>
                 <label className="text-xs text-gray-500 mb-1 block">成本（選填）</label>
@@ -263,14 +307,19 @@ export default function ProductsPage() {
               const isExpanded = !!expandedCats[catId]
               return (
                 <div key={catId} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                  <button
-                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-50/50 transition-colors text-left"
-                    onClick={() => toggleCat(catId)}
-                  >
-                    <span className="text-sm font-semibold text-gray-900 flex-1">{catName}</span>
-                    <span className="text-xs text-gray-400">{items.length} 項</span>
-                    <span className="text-xs text-gray-400">{isExpanded ? '▼' : '▶'}</span>
-                  </button>
+                  <div className="w-full flex items-center gap-3 px-4 py-3 hover:bg-amber-50/50 transition-colors">
+                    <button className="flex-1 flex items-center gap-3 text-left" onClick={() => toggleCat(catId)}>
+                      <span className="text-sm font-semibold text-gray-900">{catName}</span>
+                      <span className="text-xs text-gray-400">{items.length} 項</span>
+                      <span className="text-xs text-gray-400">{isExpanded ? '▼' : '▶'}</span>
+                    </button>
+                    {catId !== '__none__' && (
+                      <div className="flex gap-1">
+                        <button className="text-xs text-gray-400 hover:text-gray-600 px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50" onClick={() => moveCategory(catId, 'up')}>↑</button>
+                        <button className="text-xs text-gray-400 hover:text-gray-600 px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50" onClick={() => moveCategory(catId, 'down')}>↓</button>
+                      </div>
+                    )}
+                  </div>
 
                   {isExpanded && (
                     <div className="border-t border-gray-100 divide-y divide-gray-50">
@@ -278,10 +327,14 @@ export default function ProductsPage() {
                         const id = p.id || p._id
                         const enabled = p.is_enable ?? p.isEnable
                         return (
-                          <div key={id} className={`p-4 ${!enabled ? 'opacity-50' : ''}`}>
+                          <div key={id} className={`p-4 ${!enabled && !p.is_pre_listed ? 'opacity-50' : ''}`}>
                             <div className="flex items-start justify-between gap-4 mb-2">
                               <div className="flex-1">
-                                <div className="text-sm font-medium text-gray-900">{p.name}</div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-sm font-medium text-gray-900">{p.name}</span>
+                                  {p.is_pre_listed && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">預上架</span>}
+                                  {p.advance_days > 0 && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">預訂 T+{p.advance_days}</span>}
+                                </div>
                                 {p.product_code && <div className="text-xs text-gray-400 mt-0.5">SKU: {p.product_code}</div>}
                                 {p.description && <div className="text-xs text-gray-400 mt-0.5 line-clamp-1">{p.description}</div>}
                               </div>
@@ -292,10 +345,28 @@ export default function ProductsPage() {
                               {p.cost != null && <span>成本：NT${Number(p.cost).toLocaleString()}</span>}
                             </div>
                             <div className="flex items-center gap-2 flex-wrap">
+                              <div className="flex gap-1">
+                                <button className="text-xs text-gray-400 hover:text-gray-600 px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50" onClick={() => moveProduct(id, catId, 'up')}>↑</button>
+                                <button className="text-xs text-gray-400 hover:text-gray-600 px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-50" onClick={() => moveProduct(id, catId, 'down')}>↓</button>
+                              </div>
                               <label className="flex items-center gap-1.5 cursor-pointer">
                                 <input type="checkbox" checked={!!enabled} onChange={() => toggleProductEnable(p)} className="accent-amber-400 w-4 h-4" />
                                 <span className="text-xs text-gray-600">{enabled ? '上架' : '下架'}</span>
                               </label>
+                              <label className="flex items-center gap-1.5 cursor-pointer" title="預上架（下架但顯示）">
+                                <input type="checkbox" checked={!!p.is_pre_listed} onChange={() => togglePreListed(p)} className="accent-green-500 w-4 h-4" />
+                                <span className="text-xs text-gray-600">預上架</span>
+                              </label>
+                              <span className="text-xs text-gray-400">預訂天數</span>
+                              <input
+                                type="number"
+                                min="0"
+                                max="30"
+                                placeholder="-"
+                                defaultValue={p.advance_days ?? ''}
+                                onBlur={e => updateAdvanceDays(p, e.target.value)}
+                                className="w-12 text-xs border border-gray-200 rounded px-1.5 py-0.5 text-center focus:outline-none focus:ring-1 focus:ring-amber-400"
+                              />
                               <button className="text-xs text-amber-600 hover:text-amber-700 font-medium" onClick={() => openEditProduct(p)}>編輯</button>
                               <button
                                 className={`text-xs font-medium ${addonPanelProductId === id ? 'text-white bg-amber-400 px-2 py-0.5 rounded' : 'text-gray-500 hover:text-gray-700'}`}
