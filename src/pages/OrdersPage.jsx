@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import api from '../utils/api'
+import useConfirm from '../hooks/useConfirm'
 
 function formatDate(dateStr) {
   if (!dateStr) return '-'
@@ -20,8 +21,18 @@ export default function OrdersPage() {
   const [page, setPage] = useState(1)
   const [shipping, setShipping] = useState({})
   const [confirming, setConfirming] = useState({})
+  const [cancelling, setCancelling] = useState({})
+  const [reprinting, setReprinting] = useState({})
+  const [printerEnabled, setPrinterEnabled] = useState(false)
   const [searchPhone, setSearchPhone] = useState('')
   const [showTest, setShowTest] = useState(false)
+  const { confirm, ConfirmDialog } = useConfirm()
+
+  useEffect(() => {
+    api.get('/api/store-info').then(res => {
+      setPrinterEnabled(res.data.printer_enabled ?? false)
+    }).catch(() => {})
+  }, [])
 
   const fetchOrders = (includeTest = false) => {
     setLoading(true)
@@ -84,6 +95,31 @@ export default function OrdersPage() {
     }
   }
 
+  const handleCancelOrder = async (orderId) => {
+    const ok = await confirm('確定要取消此訂單？', '此操作不可復原。')
+    if (!ok) return
+    setCancelling(prev => ({ ...prev, [orderId]: true }))
+    try {
+      await api.delete(`/api/orders/admin/${orderId}`)
+      setOrders(prev => prev.map(o => (o.id || o._id) === orderId ? { ...o, is_cancelled: true } : o))
+    } catch (err) {
+      alert(err.response?.data?.message || '取消失敗')
+    } finally {
+      setCancelling(prev => ({ ...prev, [orderId]: false }))
+    }
+  }
+
+  const handleReprint = async (orderId) => {
+    setReprinting(prev => ({ ...prev, [orderId]: true }))
+    try {
+      await api.post(`/api/orders/admin/${orderId}/reprint`)
+    } catch (err) {
+      alert(err.response?.data?.message || '補印失敗')
+    } finally {
+      setReprinting(prev => ({ ...prev, [orderId]: false }))
+    }
+  }
+
   const filtered = orders.filter((o) => {
     if (showTest && !o.is_test) return false
     if (!showTest && o.is_test) return false
@@ -105,11 +141,9 @@ export default function OrdersPage() {
 
   return (
     <div>
+      {ConfirmDialog}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold text-gray-900">訂單管理</h1>
-        <button className="text-sm text-gray-500 hover:text-gray-700 underline" onClick={() => fetchOrders(showTest)}>
-          重新整理
-        </button>
       </div>
 
       {error && <div className="text-red-500 text-sm mb-4 p-3 bg-red-50 rounded-lg">{error}</div>}
@@ -143,6 +177,12 @@ export default function OrdersPage() {
           <input type="checkbox" checked={showTest} onChange={e => handleToggleTest(e.target.checked)} />
           測試訂單
         </label>
+        <button
+          className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+          onClick={() => fetchOrders(showTest)}
+        >
+          重新整理
+        </button>
       </div>
 
       {loading ? (
@@ -169,6 +209,7 @@ export default function OrdersPage() {
                 const id = o.id || o._id
                 const paid = o.is_paid ?? o.isPaid
                 const ship = o.is_ship ?? o.isShip
+                const cancelled = o.is_cancelled
                 const isExpanded = expandedId === id
                 const detail = expandedDetails[id]
                 return [
@@ -181,21 +222,27 @@ export default function OrdersPage() {
                     <td className="px-4 py-3 text-xs text-gray-600">{o.user?.phone || '-'}</td>
                     <td className="px-4 py-3 text-sm font-semibold text-gray-900">NT${Number(o.total_price || 0).toLocaleString()}</td>
                     <td className="px-4 py-3 text-xs text-gray-500">
-                      {o.pickup_date ? `${o.pickup_date} ${(o.pickup_time || '').slice(0, 5)}` : '-'}
+                      {o.pickup_date ? `${o.pickup_date} ${(o.pickup_time || '').slice(0, 5)}` : (o.pickup_time || '-')}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1 flex-wrap">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${paid ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-                          {paid ? '已確認' : '待確認'}
-                        </span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ship ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
-                          {ship ? '已出貨' : '備餐中'}
-                        </span>
+                        {cancelled ? (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-50 text-red-500">已取消</span>
+                        ) : (
+                          <>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${paid ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+                              {paid ? '已確認' : '待確認'}
+                            </span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ship ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+                              {ship ? '已出貨' : '備餐中'}
+                            </span>
+                          </>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                       <div className="flex gap-1.5 flex-wrap">
-                        {!paid && (
+                        {!cancelled && !paid && (
                           <button
                             className="px-2.5 py-1 bg-amber-400 hover:bg-amber-500 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
                             disabled={confirming[id]}
@@ -204,13 +251,31 @@ export default function OrdersPage() {
                             {confirming[id] ? '...' : '確認'}
                           </button>
                         )}
-                        {!ship && (
+                        {!cancelled && !ship && (
                           <button
                             className="px-2.5 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
                             disabled={shipping[id]}
                             onClick={() => handleShip(id)}
                           >
                             {shipping[id] ? '...' : '出貨'}
+                          </button>
+                        )}
+                        {printerEnabled && !cancelled && (
+                          <button
+                            className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+                            disabled={reprinting[id]}
+                            onClick={() => handleReprint(id)}
+                          >
+                            {reprinting[id] ? '...' : '補印'}
+                          </button>
+                        )}
+                        {!cancelled && !paid && !ship && (
+                          <button
+                            className="px-2.5 py-1 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+                            disabled={cancelling[id]}
+                            onClick={() => handleCancelOrder(id)}
+                          >
+                            {cancelling[id] ? '...' : '取消'}
                           </button>
                         )}
                       </div>
