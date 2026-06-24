@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import api from '../utils/api'
 import useConfirm from '../hooks/useConfirm'
 
-const emptyProduct = { product_code: '', name: '', description: '', price: '', origin_price: '', cost: '', stock: '', unlimited_stock: false, category_id: '' }
+const emptyProduct = { product_code: '', name: '', description: '', price: '', origin_price: '', cost: '', stock: '', unlimited_stock: false, category_id: '', primary_image_url: '' }
 const emptyAddon = { name: '', price: '', type: 'option' }
 const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent'
 
@@ -19,6 +19,9 @@ export default function ProductsPage() {
   const [productForm, setProductForm] = useState(emptyProduct)
   const [productSaving, setProductSaving] = useState(false)
   const [productError, setProductError] = useState('')
+  const [imagePreview, setImagePreview] = useState(null)
+  const [imageFile, setImageFile] = useState(null)
+  const imageInputRef = useRef(null)
 
   const [expandedCats, setExpandedCats] = useState({})
   const toggleCat = (catId) => setExpandedCats(prev => ({ ...prev, [catId]: !prev[catId] }))
@@ -53,16 +56,40 @@ export default function ProductsPage() {
 
   useEffect(() => { fetchAll() }, [])
 
-  const openAddProduct = () => { setEditingProduct(null); setProductForm(emptyProduct); setProductError(''); setShowProductForm(true) }
+  const openAddProduct = () => {
+    setEditingProduct(null); setProductForm(emptyProduct); setProductError('')
+    setImagePreview(null); setImageFile(null); setShowProductForm(true)
+  }
   const openEditProduct = (p) => {
     setEditingProduct(p)
     setProductForm({
       product_code: p.product_code || '', name: p.name || '', description: p.description || '',
       price: p.price || '', origin_price: p.origin_price || '', cost: p.cost ?? '',
       stock: p.stock ?? '', unlimited_stock: p.stock === null, category_id: p.category_id || '',
+      primary_image_url: p.primary_image_url || '',
     })
+    setImagePreview(p.primary_image_url || null)
+    setImageFile(null)
     setProductError('')
     setShowProductForm(true)
+  }
+
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 3 * 1024 * 1024) { alert('圖片不能超過 3MB'); return }
+    setImageFile(file)
+    setImagePreview(URL.createObjectURL(file))
+  }
+
+  const handleRemoveImage = async () => {
+    if (productForm.primary_image_url) {
+      try { await api.delete('/api/admin/upload-image', { data: { url: productForm.primary_image_url } }) } catch {}
+    }
+    setImageFile(null)
+    setImagePreview(null)
+    setProductForm(p => ({ ...p, primary_image_url: '' }))
+    if (imageInputRef.current) imageInputRef.current.value = ''
   }
 
   const handleProductSubmit = async (e) => {
@@ -70,6 +97,17 @@ export default function ProductsPage() {
     setProductSaving(true)
     setProductError('')
     try {
+      let imageUrl = productForm.primary_image_url || null
+      if (imageFile) {
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.readAsDataURL(imageFile)
+          reader.onload = () => resolve(reader.result)
+          reader.onerror = reject
+        })
+        const res = await api.post('/api/admin/upload-image', { base64, filename: imageFile.name })
+        imageUrl = res.data.data.url
+      }
       const payload = {
         product_code: productForm.product_code || undefined,
         name: productForm.name,
@@ -80,6 +118,7 @@ export default function ProductsPage() {
         unlimited_stock: productForm.unlimited_stock,
         stock: productForm.unlimited_stock ? undefined : (productForm.stock !== '' ? Number(productForm.stock) : 0),
         category_id: productForm.category_id || undefined,
+        primary_image_url: imageUrl,
       }
       if (editingProduct) {
         await api.patch(`/api/products/${editingProduct.id || editingProduct._id}`, payload)
@@ -247,6 +286,34 @@ export default function ProductsPage() {
         {showProductForm && (
           <form className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 mb-4" onSubmit={handleProductSubmit}>
             <div className="text-sm font-semibold text-gray-900 mb-4">{editingProduct ? '編輯商品' : '新增商品'}</div>
+
+            {/* 商品圖片 */}
+            <div className="mb-4">
+              <label className="text-xs text-gray-500 mb-1.5 block">商品圖片</label>
+              <div className="flex items-center gap-3">
+                <div className="w-20 h-20 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                  {imagePreview
+                    ? <img src={imagePreview} alt="預覽" className="w-full h-full object-cover" />
+                    : <span className="text-2xl">🍳</span>
+                  }
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                  <button type="button" onClick={() => imageInputRef.current?.click()}
+                    className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">
+                    {imagePreview ? '更換圖片' : '上傳圖片'}
+                  </button>
+                  {imagePreview && (
+                    <button type="button" onClick={handleRemoveImage}
+                      className="px-3 py-1.5 text-xs text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                      刪除圖片
+                    </button>
+                  )}
+                  <span className="text-xs text-gray-400">最大 3MB，建議正方形</span>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
               <div>
                 <label className="text-xs text-gray-500 mb-1 block">商品名稱 *</label>
@@ -329,6 +396,13 @@ export default function ProductsPage() {
                         return (
                           <div key={id} className={`p-4 ${!enabled && !p.is_pre_listed ? 'opacity-50' : ''}`}>
                             <div className="flex items-start justify-between gap-4 mb-2">
+                              <div className="flex items-start gap-3 flex-1 min-w-0">
+                                <div className="w-12 h-12 rounded-lg border border-gray-100 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                  {p.primary_image_url
+                                    ? <img src={p.primary_image_url} alt={p.name} className="w-full h-full object-cover" />
+                                    : <span className="text-lg">🍳</span>
+                                  }
+                                </div>
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="text-sm font-medium text-gray-900">{p.name}</span>
@@ -337,6 +411,7 @@ export default function ProductsPage() {
                                 </div>
                                 {p.product_code && <div className="text-xs text-gray-400 mt-0.5">SKU: {p.product_code}</div>}
                                 {p.description && <div className="text-xs text-gray-400 mt-0.5 line-clamp-1">{p.description}</div>}
+                              </div>
                               </div>
                               <div className="text-sm font-semibold text-gray-900 whitespace-nowrap">NT$ {Number(p.price || 0).toLocaleString()}</div>
                             </div>
