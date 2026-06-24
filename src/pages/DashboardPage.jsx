@@ -51,6 +51,26 @@ export default function DashboardPage() {
   const [error, setError] = useState('')
   const [period, setPeriod] = useState('日')
   const [metric, setMetric] = useState('訂單數')
+  const [isOpen, setIsOpen] = useState(false)
+  const [toggling, setToggling] = useState(false)
+
+  useEffect(() => {
+    api.get('/api/store-info').then(res => {
+      setIsOpen(res.data.is_open ?? false)
+    }).catch(() => {})
+  }, [])
+
+  const handleToggleOpen = async () => {
+    setToggling(true)
+    try {
+      await api.patch('/api/admin/open-status', { is_open: !isOpen })
+      setIsOpen(!isOpen)
+    } catch (err) {
+      alert(err.response?.data?.message || '操作失敗')
+    } finally {
+      setToggling(false)
+    }
+  }
 
   useEffect(() => {
     setLoading(true)
@@ -86,6 +106,20 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold text-gray-900">報表總覽</h1>
         <span className="text-sm text-gray-400">{todayStr}</span>
+      </div>
+
+      <div className="mb-6">
+        <button
+          onClick={handleToggleOpen}
+          disabled={toggling}
+          className={`w-full py-4 rounded-2xl font-bold text-base transition-colors disabled:opacity-50 ${
+            isOpen
+              ? 'bg-green-500 hover:bg-green-600 text-white'
+              : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+          }`}
+        >
+          {toggling ? '處理中...' : isOpen ? '🟢 營業中（點擊收攤）' : '⚫ 休息中（點擊出攤）'}
+        </button>
       </div>
 
       {error && <div className="text-red-500 text-sm mb-4 p-3 bg-red-50 rounded-lg">{error}</div>}
