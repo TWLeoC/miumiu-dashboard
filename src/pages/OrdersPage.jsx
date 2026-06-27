@@ -21,6 +21,7 @@ export default function OrdersPage() {
   const [page, setPage] = useState(1)
   const [shipping, setShipping] = useState({})
   const [confirming, setConfirming] = useState({})
+  const [confirmingOrder, setConfirmingOrder] = useState({})
   const [cancelling, setCancelling] = useState({})
   const [reprinting, setReprinting] = useState({})
   const [printerEnabled, setPrinterEnabled] = useState(false)
@@ -71,10 +72,22 @@ export default function OrdersPage() {
     }
   }
 
-  const handleConfirm = async (orderId) => {
-    setConfirming(prev => ({ ...prev, [orderId]: true }))
+  const handleConfirmOrder = async (orderId) => {
+    setConfirmingOrder(prev => ({ ...prev, [orderId]: true }))
     try {
       await api.patch(`/api/orders/admin/${orderId}/confirm`)
+      setOrders(prev => prev.map(o => (o.id || o._id) === orderId ? { ...o, is_confirmed: true } : o))
+    } catch (err) {
+      alert(err.response?.data?.message || '操作失敗')
+    } finally {
+      setConfirmingOrder(prev => ({ ...prev, [orderId]: false }))
+    }
+  }
+
+  const handleConfirmPay = async (orderId) => {
+    setConfirming(prev => ({ ...prev, [orderId]: true }))
+    try {
+      await api.patch(`/api/orders/admin/${orderId}/confirm-pay`)
       setOrders(prev => prev.map(o => (o.id || o._id) === orderId ? { ...o, is_paid: true, isPaid: true } : o))
     } catch (err) {
       alert(err.response?.data?.message || '操作失敗')
@@ -209,6 +222,7 @@ export default function OrdersPage() {
                 const id = o.id || o._id
                 const paid = o.is_paid ?? o.isPaid
                 const ship = o.is_ship ?? o.isShip
+                const confirmed = o.is_confirmed
                 const cancelled = o.is_cancelled
                 const isExpanded = expandedId === id
                 const detail = expandedDetails[id]
@@ -230,8 +244,11 @@ export default function OrdersPage() {
                           <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-50 text-red-500">已取消</span>
                         ) : (
                           <>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${confirmed ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'}`}>
+                              {confirmed ? '已接單' : '待接單'}
+                            </span>
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${paid ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-                              {paid ? '已確認' : '待確認'}
+                              {paid ? '已付款' : '未付款'}
                             </span>
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ship ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
                               {ship ? '已出貨' : '備餐中'}
@@ -242,13 +259,22 @@ export default function OrdersPage() {
                     </td>
                     <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                       <div className="flex gap-1.5 flex-wrap">
+                        {!cancelled && !confirmed && (
+                          <button
+                            className="px-2.5 py-1 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+                            disabled={confirmingOrder[id]}
+                            onClick={() => handleConfirmOrder(id)}
+                          >
+                            {confirmingOrder[id] ? '...' : '確認接單'}
+                          </button>
+                        )}
                         {!cancelled && !paid && (
                           <button
                             className="px-2.5 py-1 bg-amber-400 hover:bg-amber-500 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
                             disabled={confirming[id]}
-                            onClick={() => handleConfirm(id)}
+                            onClick={() => handleConfirmPay(id)}
                           >
-                            {confirming[id] ? '...' : '確認'}
+                            {confirming[id] ? '...' : '確認付款'}
                           </button>
                         )}
                         {!cancelled && !ship && (
