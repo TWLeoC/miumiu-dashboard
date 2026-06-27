@@ -52,6 +52,9 @@ export default function DashboardPage() {
   const [period, setPeriod] = useState('日')
   const [metric, setMetric] = useState('訂單數')
   const [isOpen, setIsOpen] = useState(false)
+  const [reportDate, setReportDate] = useState(todayStr)
+  const [reportOpen, setReportOpen] = useState(true)
+  const [report, setReport] = useState(null)
   const [toggling, setToggling] = useState(false)
 
   useEffect(() => {
@@ -82,6 +85,12 @@ export default function DashboardPage() {
       .catch((err) => setError(err.response?.data?.message || '載入訂單失敗'))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    api.get(`/api/admin/daily-report?date=${reportDate}`)
+      .then(res => setReport(res.data.data))
+      .catch(() => setReport(null))
+  }, [reportDate])
 
   const todayOrders = orders.filter((o) => {
     const d = new Date(o.created_at || o.createdAt || o.order_date)
@@ -186,6 +195,49 @@ export default function DashboardPage() {
                   <Area type="monotone" dataKey={metric === '訂單數' ? 'count' : 'revenue'} stroke="#d8aa3d" strokeWidth={2} fill="url(#colorVal)" />
                 </AreaChart>
               </ResponsiveContainer>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-center justify-between mb-3 cursor-pointer" onClick={() => setReportOpen(o => !o)}>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-gray-900">📊 日報表</h2>
+                <input
+                  type="date"
+                  value={reportDate}
+                  onChange={e => { e.stopPropagation(); setReportDate(e.target.value) }}
+                  onClick={e => e.stopPropagation()}
+                  className="text-xs border border-gray-200 rounded-md px-2 py-0.5 text-gray-500 focus:outline-none"
+                />
+              </div>
+              <span className="text-xs text-gray-400">{reportOpen ? '▲' : '▼'}</span>
+            </div>
+            {reportOpen && (
+              !report || report.order_count === 0 ? (
+                <div className="text-center py-4 text-gray-400 text-sm">今日尚無訂單</div>
+              ) : (
+                <table className="w-full text-sm">
+                  <tbody>
+                    {report.items.map(item => (
+                      <tr key={item.name}>
+                        <td className="py-1 text-gray-700">{item.name} x{item.quantity}</td>
+                        <td className="py-1 text-right text-gray-700">${item.total.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                    {report.addon_total > 0 && (
+                      <tr>
+                        <td className="py-1 text-gray-700">加購</td>
+                        <td className="py-1 text-right text-gray-700">${report.addon_total.toLocaleString()}</td>
+                      </tr>
+                    )}
+                    <tr><td colSpan={2} className="border-t border-gray-200 pt-1" /></tr>
+                    <tr>
+                      <td className="font-bold text-gray-900">總計（{report.order_count}筆）</td>
+                      <td className="text-right font-bold text-amber-700">${report.grand_total.toLocaleString()}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              )
             )}
           </div>
 
