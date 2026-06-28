@@ -94,11 +94,11 @@ export default function DashboardPage() {
 
   const todayOrders = orders.filter((o) => {
     const d = new Date(o.created_at || o.createdAt || o.order_date)
-    return d.toISOString().slice(0, 10) === todayStr
+    return d.toISOString().slice(0, 10) === todayStr && !o.is_cancelled
   })
   const todayRevenue = todayOrders.reduce((s, o) => s + Number(o.total_price || o.totalPrice || 0), 0)
   const thisMonth = todayStr.slice(0, 7)
-  const monthOrders = orders.filter(o => (o.created_at || '').startsWith(thisMonth))
+  const monthOrders = orders.filter(o => (o.created_at || '').startsWith(thisMonth) && !o.is_cancelled)
   const monthRevenue = monthOrders.reduce((s, o) => s + Number(o.total_price || o.totalPrice || 0), 0)
   const chartData = groupOrders(orders, period)
   const recentOrders = orders.slice(0, 5)
