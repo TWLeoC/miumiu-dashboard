@@ -185,6 +185,8 @@ export default function DashboardPage() {
                   <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#9e8060' }} tickLine={false} axisLine={{ stroke: '#ede8df' }} />
                   <YAxis
                     tick={{ fontSize: 11, fill: '#9e8060' }} tickLine={false} axisLine={false} width={50}
+                    domain={[0, 'auto']}
+                    allowDecimals={metric === '營收'}
                     tickFormatter={(v) => metric === '營收' ? `${(v / 1000).toFixed(0)}k` : v}
                   />
                   <Tooltip
