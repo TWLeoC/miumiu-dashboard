@@ -186,8 +186,8 @@ export default function DashboardPage() {
                   <YAxis
                     tick={{ fontSize: 11, fill: '#9e8060' }} tickLine={false} axisLine={false} width={50}
                     domain={[0, 'auto']}
-                    allowDecimals={metric === '營收'}
-                    tickFormatter={(v) => metric === '營收' ? `${(v / 1000).toFixed(0)}k` : v}
+                    allowDecimals={false}
+                    tickFormatter={(v) => metric === '營收' ? (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v) : v}
                   />
                   <Tooltip
                     formatter={(value) => [metric === '營收' ? `NT$ ${value.toLocaleString()}` : `${value} 筆`, metric]}
