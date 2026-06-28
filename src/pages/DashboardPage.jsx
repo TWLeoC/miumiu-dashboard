@@ -27,6 +27,7 @@ function getWeekKey(dateStr) {
 function groupOrders(orders, period) {
   const map = {}
   orders.forEach((o) => {
+    if (o.is_cancelled) return
     const d = new Date(o.created_at || o.createdAt || o.order_date)
     if (isNaN(d)) return
     let key
